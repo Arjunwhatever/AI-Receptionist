@@ -1,4 +1,4 @@
-from db import Base
+from app.db import Base
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Time, Numeric
 
@@ -28,4 +28,7 @@ class Appointment(Base):
     service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id"))
     customer_name: Mapped[str] = mapped_column(String(200), nullable = False)
     customer_phone: Mapped[str] = mapped_column(String(20), nullable = False)
-    starts_at: Mapped[DateTime]
+    starts_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default = "booked")
+    
