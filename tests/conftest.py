@@ -33,7 +33,7 @@ def tenant(db):
     t = Tenant(
         name="Test Salon",
         timezone="Asia/Kolkata",
-        open_time=time(9, 8),
+        open_time=time(9, 0),
         close_time=time(17, 0),
     )
     db.add(t)
@@ -46,8 +46,8 @@ def service(db, tenant):
     s = Service(
         tenant_id=tenant.id,
         name="Haircut",
-        duration_minutes=30,
-        price=20.00,
+        duration_minutes=60,
+        price=500,
     )
     db.add(s)
     db.flush()
