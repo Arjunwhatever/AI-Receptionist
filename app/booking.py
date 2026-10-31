@@ -55,7 +55,10 @@ def _has_conflict(db: Session, tenant_id: int, starts_at, ends_at, exclude_id=No
 def book(db: Session, tenant_id: int, service_id: int,
          customer_name: str, customer_phone: str, starts_at: datetime):
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
-    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    ends_at =  starts_at + timedelta(minutes=service.duration_minutes)
+
+    if _has_conflict(db, tenant_id, starts_at, ends_at):
+        raise SlotUnavailable("The requested time slot is not available")
 
     appointment = Appointment(
         tenant_id=tenant_id, service_id=service_id,
