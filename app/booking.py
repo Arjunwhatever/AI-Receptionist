@@ -90,6 +90,11 @@ def book(db: Session, tenant_id: int, service_id: int,
     db.flush()
     return appointment
 
+def cancel(db: Session, tenant_id: int, appointment_id: int):
+    appointment = _get_appointment(db, tenant_id, appointment_id)
+    appointment.status = "cancelled"
+    db.flush()
+    return appointment
 
 def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date):
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
