@@ -96,6 +96,23 @@ def cancel(db: Session, tenant_id: int, appointment_id: int):
     db.flush()
     return appointment
 
+def reschedule(db: Session, tenant_id: int, appointment_id: int,
+               new_starts_at: datetime):
+    appointment = _get_appointment(db, tenant_id, appointment_id)
+    tenant = db.get(Tenant, tenant_id)
+    service = db.get(Service, appointment.service_id)
+    new_ends_at = new_starts_at + timedelta(minutes=service.duration_minutes)
+
+    _check_hours(tenant, new_starts_at, new_ends_at)
+    if _has_conflict(db, tenant_id, new_starts_at, new_ends_at,
+                     exclude_id=appointment.id):
+        raise SlotUnavailable("That time is already booked")
+
+    appointment.starts_at = new_starts_at
+    appointment.ends_at = new_ends_at
+    db.flush()
+    return appointment
+
 def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date):
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
     duration = timedelta(minutes=service.duration_minutes)

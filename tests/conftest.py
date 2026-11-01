@@ -52,3 +52,12 @@ def service(db, tenant):
     db.add(s)
     db.flush()
     return s
+@pytest.fixture
+def other_tenant(db):
+    t = Tenant(name="Other Salon", timezone="UTC",
+               open_time=time(9, 0), close_time=time(17, 0))
+    db.add(t)
+    db.flush()
+    return t
+
+

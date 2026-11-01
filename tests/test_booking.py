@@ -56,3 +56,68 @@ def test_book_last_slot_allowed(db, tenant, service):
     appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(16))
     assert appt.id is not None
 
+def test_cancel_marks_appointment_cancelled(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    cancelled = booking.cancel(db, tenant.id, appt.id)
+    assert cancelled.status == "cancelled"
+
+
+def test_cancelled_slot_is_available_again(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    booking.cancel(db, tenant.id, appt.id)
+    slots = booking.get_available_slots(db, tenant.id, service.id, Day)
+    assert at(10) in slots
+    assert len(slots) == 15
+
+
+def test_cancel_other_tenants_appointment_raises(db, tenant, service, other_tenant):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    with pytest.raises(booking.NotFound):
+        booking.cancel(db, other_tenant.id, appt.id)
+
+
+def test_cancel_twice_raises(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    booking.cancel(db, tenant.id, appt.id)
+    with pytest.raises(booking.NotFound):
+        booking.cancel(db, tenant.id, appt.id)
+
+def test_reschedule_moves_appointment(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    moved = booking.reschedule(db, tenant.id, appt.id, at(14))
+    assert moved.id == appt.id
+    assert moved.starts_at == at(14)
+    assert moved.ends_at == at(15)
+
+
+def test_reschedule_frees_old_slot(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    booking.reschedule(db, tenant.id, appt.id, at(14))
+    slots = booking.get_available_slots(db, tenant.id, service.id, Day)
+    assert at(10) in slots
+    assert at(14) not in slots
+
+
+def test_reschedule_into_taken_slot_raises(db, tenant, service):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    appt = booking.book(db, tenant.id, service.id, "Ben", PHONE, at(14))
+    with pytest.raises(booking.SlotUnavailable):
+        booking.reschedule(db, tenant.id, appt.id, at(10, 30))
+
+
+def test_reschedule_within_own_slot(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    moved = booking.reschedule(db, tenant.id, appt.id, at(10, 30))
+    assert moved.starts_at == at(10, 30)
+
+
+def test_reschedule_outside_hours_raises(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    with pytest.raises(booking.OutsideHours):
+        booking.reschedule(db, tenant.id, appt.id, at(16, 30))
+
+
+def test_reschedule_other_tenants_appointment_raises(db, tenant, service, other_tenant):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    with pytest.raises(booking.NotFound):
+        booking.reschedule(db, other_tenant.id, appt.id, at(14))
