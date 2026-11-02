@@ -5,6 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Appointment, Service, Tenant
+from contextlib import contextmanager
+from sqlalchemy.exc import IntegrityError
+
 
 SLOT_STEP = timedelta(minutes=30)
 
@@ -86,6 +89,15 @@ def _get_appointment(db: Session, tenant_id: int, appointment_id: int):
         raise NotFound("Appointment not found")
     return appointment
 
+@contextmanager
+def _translate_overlap(db: Session):
+    try:
+        with db.begin_nested():
+            yield
+    except IntegrityError as error:
+        if getattr(error.orig, "sqlstate", None) == "23P01":  # exclusion_violation
+            raise SlotUnavailable("That time is already booked") from error
+        raise
 
 def book(db: Session, tenant_id: int, service_id: int,
          customer_name: str, customer_phone: str, starts_at: datetime):
@@ -101,9 +113,11 @@ def book(db: Session, tenant_id: int, service_id: int,
         customer_name=customer_name, customer_phone=customer_phone,
         starts_at=starts_at, ends_at=ends_at, status="booked",
     )
-    db.add(appointment)
-    db.flush()
+    with _translate_overlap(db):
+        db.add(appointment)
+        db.flush()
     return appointment
+    
 
 def cancel(db: Session, tenant_id: int, appointment_id: int):
     appointment = _get_appointment(db, tenant_id, appointment_id)
@@ -123,9 +137,10 @@ def reschedule(db: Session, tenant_id: int, appointment_id: int,
                      exclude_id=appointment.id):
         raise SlotUnavailable("That time is already booked")
 
-    appointment.starts_at = new_starts_at
-    appointment.ends_at = new_ends_at
-    db.flush()
+    with _translate_overlap(db):
+        appointment.starts_at = new_starts_at
+        appointment.ends_at = new_ends_at
+        db.flush()
     return appointment
 
 def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date):

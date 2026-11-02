@@ -17,6 +17,7 @@ class Service(Base):
     __tablename__ = "services"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    #service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), nullable=False)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -28,7 +29,7 @@ class Appointment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id"), nullable=True)
+    service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id"), nullable=False)
     customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
     customer_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     starts_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)

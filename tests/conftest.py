@@ -4,9 +4,10 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
-
+from sqlalchemy import create_engine, text
 from app.db import Base
 from app.models import Service, Tenant
+
 
 TEST_URL = "postgresql+psycopg://receptionist:receptionist@localhost:5432/receptionist_test"
 
@@ -61,3 +62,21 @@ def other_tenant(db):
     return t
 
 
+EXTENSION_SQL = "CREATE EXTENSION IF NOT EXISTS btree_gist"
+CONSTRAINT_SQL = """
+ALTER TABLE appointments
+ADD CONSTRAINT no_overlapping_bookings
+EXCLUDE USING gist (
+    tenant_id WITH =,
+    tstzrange(starts_at, ends_at) WITH &&
+) WHERE (status = 'booked')
+"""
+@pytest.fixture(scope="session")
+def engine():
+    engine = create_engine(TEST_URL)
+    Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text(EXTENSION_SQL))
+        conn.execute(text(CONSTRAINT_SQL))
+    yield engine
+    Base.metadata.drop_all(engine)
