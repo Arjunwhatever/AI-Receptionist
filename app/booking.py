@@ -59,6 +59,21 @@ def _has_conflict(db: Session, tenant_id: int, starts_at, ends_at, exclude_id=No
         query = query.where(Appointment.id != exclude_id)
     return db.execute(query.limit(1)).first() is not None
 
+def _overlaps(a_start, a_end, b_start, b_end):
+    return a_start < b_end and a_end > b_start
+
+
+def _booked_ranges(db: Session, tenant_id: int, window_start, window_end):
+    rows = db.execute(
+        select(Appointment.starts_at, Appointment.ends_at).where(
+            Appointment.tenant_id == tenant_id,
+            Appointment.status == "booked",
+            Appointment.starts_at < window_end,
+            Appointment.ends_at > window_start,
+        )
+    ).all()
+    return [(row.starts_at, row.ends_at) for row in rows]
+
 def _get_appointment(db: Session, tenant_id: int, appointment_id: int):
     appointment = db.execute(
         select(Appointment).where(
@@ -117,11 +132,13 @@ def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date)
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
     duration = timedelta(minutes=service.duration_minutes)
     opens, closes = _day_bounds(tenant, day)
+    booked = _booked_ranges(db, tenant_id, opens, closes)
 
     slots = []
     start = opens
     while start + duration <= closes:
-        if not _has_conflict(db, tenant_id, start, start + duration):
+        end = start + duration
+        if not any(_overlaps(start, end, b_start, b_end) for b_start, b_end in booked):
             slots.append(start.astimezone(timezone.utc))
         start += SLOT_STEP
     return slots

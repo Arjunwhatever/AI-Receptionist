@@ -2,12 +2,33 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 import pytest 
 from app import booking
+from sqlalchemy import event
+from datetime import timedelta
+from sqlalchemy.exc import IntegrityError
+from app.models import Appointment
+
 
 IST = ZoneInfo("Asia/Kolkata")
 Day = date(2026, 11, 2)
 PHONE = "+911234567890"
 
 
+def test_available_slots_makes_one_appointments_query(db, tenant, service):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+
+    statements = []
+
+    def record(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    conn = db.get_bind()
+    event.listen(conn, "before_cursor_execute", record)
+    try:
+        booking.get_available_slots(db, tenant.id, service.id, Day)
+    finally:
+        event.remove(conn, "before_cursor_execute", record)
+
+    assert sum("FROM appointments" in s for s in statements) == 1
 def at(hour, minute=0):
     return datetime(Day.year, Day.month, Day.day, hour, minute, tzinfo=IST)
 
@@ -121,3 +142,51 @@ def test_reschedule_other_tenants_appointment_raises(db, tenant, service, other_
     appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
     with pytest.raises(booking.NotFound):
         booking.reschedule(db, other_tenant.id, appt.id, at(14))
+
+def test_overlaps_boundaries():
+    assert booking._overlaps(at(9), at(10), at(9, 30), at(10, 30))      # partial
+    assert booking._overlaps(at(9), at(12), at(10), at(11))             # contains
+    assert booking._overlaps(at(10), at(11), at(10), at(11))            # identical
+    assert not booking._overlaps(at(9), at(10), at(10), at(11))         # touching
+    assert not booking._overlaps(at(11), at(12), at(10), at(11))        # touching
+
+
+def _row(tenant, service, starts_at):
+    return Appointment(
+        tenant_id=tenant.id, service_id=service.id,
+        customer_name="X", customer_phone=PHONE,
+        starts_at=starts_at, ends_at=starts_at + timedelta(minutes=60),
+        status="booked",
+    )
+
+
+def test_database_rejects_overlapping_rows(db, tenant, service):
+    db.add(_row(tenant, service, at(10)))
+    db.flush()
+    with pytest.raises(IntegrityError):
+        with db.begin_nested():
+            db.add(_row(tenant, service, at(10, 30)))
+            db.flush()
+
+
+def test_book_turns_db_conflict_into_slot_unavailable(db, tenant, service, monkeypatch):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    # Simulate losing a race: the Python check says "free", the database disagrees.
+    monkeypatch.setattr(booking, "_has_conflict", lambda *a, **k: False)
+    with pytest.raises(booking.SlotUnavailable):
+        booking.book(db, tenant.id, service.id, "Ben", PHONE, at(10, 30))
+
+
+def test_reschedule_turns_db_conflict_into_slot_unavailable(db, tenant, service, monkeypatch):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    appt = booking.book(db, tenant.id, service.id, "Ben", PHONE, at(14))
+    monkeypatch.setattr(booking, "_has_conflict", lambda *a, **k: False)
+    with pytest.raises(booking.SlotUnavailable):
+        booking.reschedule(db, tenant.id, appt.id, at(10, 30))
+
+
+def test_can_rebook_after_cancel(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    booking.cancel(db, tenant.id, appt.id)
+    again = booking.book(db, tenant.id, service.id, "Ben", PHONE, at(10))
+    assert again.id is not None
