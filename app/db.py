@@ -9,7 +9,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 """docker compose up -d
 docker compose ps
-docker compose exec db psql -U receptionist -c "create database receptionist_test"""
+docker compose exec db psql -U receptionist -c "create database receptionist_test" """
 class Base(DeclarativeBase):
     pass
 
