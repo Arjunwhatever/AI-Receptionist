@@ -137,9 +137,10 @@ def reschedule(db: Session, tenant_id: int, appointment_id: int,
                      exclude_id=appointment.id):
         raise SlotUnavailable("That time is already booked")
 
-    appointment.starts_at = new_starts_at
-    appointment.ends_at = new_ends_at
-    db.flush()
+    with _translate_overlap(db):
+        appointment.starts_at = new_starts_at
+        appointment.ends_at = new_ends_at
+        db.flush()
     return appointment
 
 def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date):
