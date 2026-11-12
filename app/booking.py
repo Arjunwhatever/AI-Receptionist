@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+import re
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -157,3 +158,24 @@ def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date)
             slots.append(start.astimezone(timezone.utc))
         start += SLOT_STEP
     return slots
+
+class InThePast(BookingError):
+    pass
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _check_future(starts_at: datetime):
+    if starts_at <= _now():
+        raise InThePast("That time has already passed")
+
+class InvalidDetails(BookingError):
+    pass
+
+
+def _check_phone(phone: str):
+    digits = re.sub(r"\D", "", phone)
+    if not 7 <= len(digits) <= 15:
+        raise InvalidDetails("That doesn't look like a valid phone number")

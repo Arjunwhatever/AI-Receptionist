@@ -5,7 +5,7 @@ from app.db import SessionLocal
 
 logging.basicConfig(level=logging.INFO, format="  [%(name)s] %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 TENANT_ID = 1
 
 with SessionLocal() as db:

@@ -12,6 +12,10 @@ IST = ZoneInfo("Asia/Kolkata")
 Day = date(2026, 11, 2)
 PHONE = "+911234567890"
 
+def test_book_rejects_bad_phone(db, tenant, service):
+    with pytest.raises(booking.InvalidDetails):
+        booking.book(db, tenant.id, service.id, "Asha", "123", at(10))
+
 
 def test_available_slots_makes_one_appointments_query(db, tenant, service):
     booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
@@ -190,3 +194,21 @@ def test_can_rebook_after_cancel(db, tenant, service):
     booking.cancel(db, tenant.id, appt.id)
     again = booking.book(db, tenant.id, service.id, "Ben", PHONE, at(10))
     assert again.id is not None
+
+def test_cannot_book_in_the_past(db, tenant, service, monkeypatch):
+    monkeypatch.setattr(booking, "_now", lambda: at(12))
+    with pytest.raises(booking.InThePast):
+        booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+
+
+def test_past_slots_are_not_offered(db, tenant, service, monkeypatch):
+    monkeypatch.setattr(booking, "_now", lambda: at(12))
+    slots = booking.get_available_slots(db, tenant.id, service.id, Day)
+    assert slots[0] == at(12, 30)
+
+
+def test_cannot_reschedule_into_the_past(db, tenant, service, monkeypatch):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(14))
+    monkeypatch.setattr(booking, "_now", lambda: at(12))
+    with pytest.raises(booking.InThePast):
+        booking.reschedule(db, tenant.id, appt.id, at(10))

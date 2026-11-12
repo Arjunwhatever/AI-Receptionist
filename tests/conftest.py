@@ -1,10 +1,11 @@
-from datetime import time
+from datetime import datetime, time, timezone
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from sqlalchemy import create_engine, text
+from app import booking
 from app.db import Base
 from app.models import Service, Tenant
 
@@ -80,3 +81,8 @@ def engine():
         conn.execute(text(CONSTRAINT_SQL))
     yield engine
     Base.metadata.drop_all(engine)
+    
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    # "Now" is 1 Nov 2026, before the dates the tests use.
+    monkeypatch.setattr(booking, "_now", lambda: datetime(2026, 11, 1, tzinfo=timezone.utc))
