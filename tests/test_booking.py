@@ -212,3 +212,36 @@ def test_cannot_reschedule_into_the_past(db, tenant, service, monkeypatch):
     monkeypatch.setattr(booking, "_now", lambda: at(12))
     with pytest.raises(booking.InThePast):
         booking.reschedule(db, tenant.id, appt.id, at(10))
+
+def test_find_upcoming_filters_and_orders(db, tenant, service, other_tenant):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(14))
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    booking.book(db, tenant.id, service.id, "Ben", "+919999999999", at(12))
+    cancelled = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(16))
+    booking.cancel(db, tenant.id, cancelled.id)
+
+    found = booking.find_upcoming(db, tenant.id, PHONE, now=at(8))
+    assert [a.starts_at for a in found] == [at(10), at(14)]
+    assert booking.find_upcoming(db, other_tenant.id, PHONE, now=at(8)) == []
+
+
+def test_find_upcoming_skips_past_appointments(db, tenant, service):
+    booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    assert booking.find_upcoming(db, tenant.id, PHONE, now=at(12)) == []
+
+
+def test_phone_formats_match(db, tenant, service):
+    booking.book(db, tenant.id, service.id, "Asha", "+91 12345-67890", at(10))
+    assert len(booking.find_upcoming(db, tenant.id, "+911234567890", now=at(8))) == 1
+
+
+def test_cancel_with_wrong_phone_raises(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    with pytest.raises(booking.NotFound):
+        booking.cancel(db, tenant.id, appt.id, customer_phone="+910000000000")
+
+
+def test_reschedule_with_wrong_phone_raises(db, tenant, service):
+    appt = booking.book(db, tenant.id, service.id, "Asha", PHONE, at(10))
+    with pytest.raises(booking.NotFound):
+        booking.reschedule(db, tenant.id, appt.id, at(14), customer_phone="+910000000000")
