@@ -102,10 +102,12 @@ def _translate_overlap(db: Session):
 
 def book(db: Session, tenant_id: int, service_id: int,
          customer_name: str, customer_phone: str, starts_at: datetime):
+    _check_phone(customer_phone)
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
     ends_at = starts_at + timedelta(minutes=service.duration_minutes)
 
     _check_hours(tenant, starts_at, ends_at)
+    _check_future(starts_at)
     if _has_conflict(db, tenant_id, starts_at, ends_at):
         raise SlotUnavailable("That time is already booked")
 
@@ -118,7 +120,6 @@ def book(db: Session, tenant_id: int, service_id: int,
         db.add(appointment)
         db.flush()
     return appointment
-    
 
 def cancel(db: Session, tenant_id: int, appointment_id: int):
     appointment = _get_appointment(db, tenant_id, appointment_id)
@@ -134,6 +135,7 @@ def reschedule(db: Session, tenant_id: int, appointment_id: int,
     new_ends_at = new_starts_at + timedelta(minutes=service.duration_minutes)
 
     _check_hours(tenant, new_starts_at, new_ends_at)
+    _check_future(new_starts_at)
     if _has_conflict(db, tenant_id, new_starts_at, new_ends_at,
                      exclude_id=appointment.id):
         raise SlotUnavailable("That time is already booked")
@@ -149,16 +151,19 @@ def get_available_slots(db: Session, tenant_id: int, service_id: int, day: date)
     duration = timedelta(minutes=service.duration_minutes)
     opens, closes = _day_bounds(tenant, day)
     booked = _booked_ranges(db, tenant_id, opens, closes)
+    now = _now()
 
     slots = []
     start = opens
     while start + duration <= closes:
         end = start + duration
-        if not any(_overlaps(start, end, b_start, b_end) for b_start, b_end in booked):
+        overlaps_booking = any(
+            _overlaps(start, end, b_start, b_end) for b_start, b_end in booked
+        )
+        if start > now and not overlaps_booking:
             slots.append(start.astimezone(timezone.utc))
         start += SLOT_STEP
     return slots
-
 class InThePast(BookingError):
     pass
 
