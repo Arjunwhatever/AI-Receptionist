@@ -78,18 +78,22 @@ def _booked_ranges(db: Session, tenant_id: int, window_start, window_end):
     ).all()
     return [(row.starts_at, row.ends_at) for row in rows]
 
-def _get_appointment(db: Session, tenant_id: int, appointment_id: int):
-    appointment = db.execute(
-        select(Appointment).where(
-            Appointment.id == appointment_id,
-            Appointment.tenant_id == tenant_id,
-            Appointment.status == "booked",
+def _get_appointment(db: Session, tenant_id: int, appointment_id: int,
+                     customer_phone: str | None = None):
+    query = select(Appointment).where(
+        Appointment.id == appointment_id,
+        Appointment.tenant_id == tenant_id,
+        Appointment.status == "booked",
+    )
+    if customer_phone is not None:
+        customer_phone = normalize_phone(customer_phone)
+        query = query.where(
+            Appointment.customer_phone == customer_phone
         )
-    ).scalar_one_or_none()
+    appointment = db.execute(query).scalar_one_or_none()
     if appointment is None:
         raise NotFound("Appointment not found")
     return appointment
-
 @contextmanager
 def _translate_overlap(db: Session):
     try:
@@ -103,6 +107,7 @@ def _translate_overlap(db: Session):
 def book(db: Session, tenant_id: int, service_id: int,
          customer_name: str, customer_phone: str, starts_at: datetime):
     _check_phone(customer_phone)
+    customer_phone = normalize_phone(customer_phone)
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
     ends_at = starts_at + timedelta(minutes=service.duration_minutes)
 
@@ -121,15 +126,16 @@ def book(db: Session, tenant_id: int, service_id: int,
         db.flush()
     return appointment
 
-def cancel(db: Session, tenant_id: int, appointment_id: int):
-    appointment = _get_appointment(db, tenant_id, appointment_id)
+def cancel(db: Session, tenant_id: int, appointment_id: int,
+           customer_phone: str | None = None):
+    appointment = _get_appointment(db, tenant_id, appointment_id, customer_phone)
     appointment.status = "cancelled"
     db.flush()
     return appointment
 
 def reschedule(db: Session, tenant_id: int, appointment_id: int,
-               new_starts_at: datetime):
-    appointment = _get_appointment(db, tenant_id, appointment_id)
+               new_starts_at: datetime, customer_phone: str | None = None):
+    appointment = _get_appointment(db, tenant_id, appointment_id, customer_phone)
     tenant = db.get(Tenant, tenant_id)
     service = db.get(Service, appointment.service_id)
     new_ends_at = new_starts_at + timedelta(minutes=service.duration_minutes)
@@ -184,3 +190,22 @@ def _check_phone(phone: str):
     digits = re.sub(r"\D", "", phone)
     if not 7 <= len(digits) <= 15:
         raise InvalidDetails("That doesn't look like a valid phone number")
+
+def normalize_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    if not 7 <= len(digits) <= 15:
+        raise InvalidDetails("That doesn't look like a valid phone number")
+    return "+" + digits
+
+def find_upcoming(db: Session, tenant_id: int, customer_phone: str, now = None):
+    customer_phone = normalize_phone(customer_phone)
+    if now is None:
+        now = _now()
+    query = select(Appointment).where(
+        Appointment.tenant_id == tenant_id,
+        Appointment.status == "booked",
+        Appointment.customer_phone == customer_phone,
+        Appointment.ends_at >= now,
+    ).order_by(Appointment.starts_at)
+    return list(db.execute(query).scalars())
+
