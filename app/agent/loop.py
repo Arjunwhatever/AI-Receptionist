@@ -38,7 +38,10 @@ Rules:
 - To book you need: the service, the date and time, the caller's name, and the caller's phone number. Ask for anything missing, one question at a time.
 - Never invent a name or a phone number.
 - Confirm the details with the caller before calling book_appointment.
-- If a tool returns an error, explain it simply and offer an alternative."""
+- If a tool returns an error, explain it simply and offer an alternative.
+- To cancel or reschedule, first ask for the caller's phone number and call find_my_appointments. Never guess an appointment id.
+- Before cancelling, say which appointment you are about to cancel and get a clear yes.
+- If the caller already gave their phone number in this conversation, use it. Do not ask twice."""
 
 
 def respond(db: Session, tenant_id: int, messages: list[dict], user_text: str) -> str:
