@@ -1,6 +1,8 @@
+from datetime import datetime
+
 from app.db import Base
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Integer, ForeignKey, DateTime, Time, Numeric
+from sqlalchemy import String, Integer, ForeignKey, DateTime, Time, Numeric, Text, func
 
 
 class Tenant(Base):
@@ -36,3 +38,14 @@ class Appointment(Base):
     ends_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="booked")
 
+class OwnerMessage(Base):
+    __tablename__ = "owner_messages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    caller_name: Mapped[str] = mapped_column(String(200))
+    caller_phone: Mapped[str] = mapped_column(String(32))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="new")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
