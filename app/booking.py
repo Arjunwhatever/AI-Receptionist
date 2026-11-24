@@ -106,7 +106,7 @@ def _translate_overlap(db: Session):
 
 def book(db: Session, tenant_id: int, service_id: int,
          customer_name: str, customer_phone: str, starts_at: datetime):
-    _check_phone(customer_phone)
+    check_phone(customer_phone)
     customer_phone = normalize_phone(customer_phone)
     tenant, service = _get_tenant_service(db, tenant_id, service_id)
     ends_at = starts_at + timedelta(minutes=service.duration_minutes)
@@ -186,7 +186,7 @@ class InvalidDetails(BookingError):
     pass
 
 
-def _check_phone(phone: str):
+def check_phone(phone: str):
     digits = re.sub(r"\D", "", phone)
     if not 7 <= len(digits) <= 15:
         raise InvalidDetails("That doesn't look like a valid phone number")
