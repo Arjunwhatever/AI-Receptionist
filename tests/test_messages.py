@@ -1,5 +1,7 @@
 import pytest
-
+import sqlalchemy
+from sqlalchemy import select 
+from app.models import OwnerMessage
 from app import booking, messages
 
 PHONE = "+911234567890"
@@ -36,3 +38,8 @@ def leave_message(db, tenant_id, caller_name, body):
     with pytest.raises(booking.NotFound):
         messages.leave_message(db, tenant_id, caller_name, PHONE, body)
         
+def test_message_length_limit(db, tenant):
+    ok = messages.leave_message(db, tenant.id, "Asha", PHONE, "x" * 1000)
+    assert ok.id is not None
+    with pytest.raises(booking.InvalidDetails):
+        messages.leave_message(db, tenant.id, "Asha", PHONE, "x" * 1001)

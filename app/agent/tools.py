@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
-from app import booking
+from app import booking, messages
 from app.models import Tenant, Service
 TOOLS = [
     {
@@ -178,6 +178,15 @@ def _book_appointment(db: Session, tenant_id: int, args: dict) -> dict:
         "end": appointment.ends_at.astimezone(tz).strftime("%Y-%m-%d %H:%M"),
     }
 
+def _take_message(db: Session, tenant_id: int, args: dict) -> dict:
+    messages.leave_message(
+        db, tenant_id,
+        str(args["caller_name"]),
+        str(args["caller_phone"]),
+        str(args["message"]),
+    )
+    return {"status": "message_saved"}
+
 def execute_tool(db: Session, tenant_id: int, name: str, args) -> dict:
     """Run one tool call. Always returns a dict; problems become {"error": ...}."""
     if not isinstance(args, dict):
@@ -193,9 +202,14 @@ def execute_tool(db: Session, tenant_id: int, name: str, args) -> dict:
             return _cancel_appointment(db, tenant_id, args)
         if name == "reschedule_appointment":
             return _reschedule_appointment(db, tenant_id, args)
+        if name == "take_message":
+            return _take_message(db, tenant_id, args)
+
         return {"error": f"Unknown tool: {name}"}
     except booking.BookingError as error:
         return {"error": str(error)}
     except (KeyError, ValueError, TypeError) as error:
         return {"error": f"Invalid arguments: {error!r}"}
+
+
 
